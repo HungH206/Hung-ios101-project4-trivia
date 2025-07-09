@@ -22,11 +22,24 @@ class TriviaViewController: UIViewController {
   private var currQuestionIndex = 0
   private var numCorrectQuestions = 0
   
-  override func viewDidLoad() {
-    super.viewDidLoad()
-    addGradient()
-    questionContainerView.layer.cornerRadius = 8.0
-    // TODO: FETCH TRIVIA QUESTIONS HERE
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        addGradient()
+        questionContainerView.layer.cornerRadius = 8.0
+        // TODO: FETCH TRIVIA QUESTIONS HERE
+        TriviaQuestionService.fetchTriviaQuestions { [weak self] result in
+            guard let self = self else { return }
+            switch result {
+            case .success(let questions):
+                self.questions = questions
+                self.currQuestionIndex = 0
+                self.numCorrectQuestions = 0
+                self.updateQuestion(withQuestionIndex: self.currQuestionIndex)
+            case .failure(let error):
+                // Handle error (e.g., show an alert)
+                print("Failed to fetch questions: \(error)")
+        }
+    }
   }
   
   private func updateQuestion(withQuestionIndex questionIndex: Int) {
@@ -34,22 +47,40 @@ class TriviaViewController: UIViewController {
     let question = questions[questionIndex]
     questionLabel.text = question.question
     categoryLabel.text = question.category
-    let answers = ([question.correctAnswer] + question.incorrectAnswers).shuffled()
-    if answers.count > 0 {
-      answerButton0.setTitle(answers[0], for: .normal)
-    }
-    if answers.count > 1 {
-      answerButton1.setTitle(answers[1], for: .normal)
-      answerButton1.isHidden = false
-    }
-    if answers.count > 2 {
-      answerButton2.setTitle(answers[2], for: .normal)
-      answerButton2.isHidden = false
-    }
-    if answers.count > 3 {
-      answerButton3.setTitle(answers[3], for: .normal)
-      answerButton3.isHidden = false
-    }
+      // Combine correct and incorrect answers
+         var answers = ([question.correctAnswer] + question.incorrectAnswers).shuffled()
+
+         // Hide all answer buttons by default
+         [answerButton0, answerButton1, answerButton2, answerButton3].forEach { $0?.isHidden = true }
+
+         if question.type == "boolean" {
+             // Force True/False answers
+             answers = ["True", "False"].shuffled()
+             answerButton0.setTitle(answers[0], for: .normal)
+             answerButton1.setTitle(answers[1], for: .normal)
+             answerButton0.isHidden = false
+             answerButton1.isHidden = false
+         } else {
+             // Multiple choice (max 4 options)
+             for (index, answer) in answers.enumerated() {
+                 switch index {
+                 case 0:
+                     answerButton0.setTitle(answer.htmlDecoded, for: .normal)
+                     answerButton0.isHidden = false
+                 case 1:
+                     answerButton1.setTitle(answer.htmlDecoded, for: .normal)
+                     answerButton1.isHidden = false
+                 case 2:
+                     answerButton2.setTitle(answer.htmlDecoded, for: .normal)
+                     answerButton2.isHidden = false
+                 case 3:
+                     answerButton3.setTitle(answer.htmlDecoded, for: .normal)
+                     answerButton3.isHidden = false
+                 default:
+                     break
+                 }
+             }
+         }
   }
   
   private func updateToNextQuestion(answer: String) {
@@ -108,3 +139,13 @@ class TriviaViewController: UIViewController {
   }
 }
 
+extension String {
+    var htmlDecoded: String {
+        guard let data = self.data(using: .utf8) else { return self }
+        let options: [NSAttributedString.DocumentReadingOptionKey: Any] = [
+            .documentType: NSAttributedString.DocumentType.html,
+            .characterEncoding: String.Encoding.utf8.rawValue
+        ]
+        return (try? NSAttributedString(data: data, options: options, documentAttributes: nil))?.string ?? self
+    }
+}
